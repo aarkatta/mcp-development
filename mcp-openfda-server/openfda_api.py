@@ -77,6 +77,28 @@ def _filter_shortage_data(results: list) -> list:
     return clean_data
 
 
+async def _make_fda_request(url: str, params: dict) -> dict:
+    """
+    Makes a request to the openFDA API and handles common errors.
+    """
+    if API_KEY:
+        params["api_key"] = API_KEY
+
+    async with httpx.AsyncClient() as client:
+        try:
+            response = await client.get(url, params=params, timeout=TIMEOUT)
+            if response.status_code == 404:
+                return {"success": True, "data": {"results": []}}
+            response.raise_for_status()
+            return {"success": True, "data": response.json()}
+        except httpx.HTTPStatusError as e:
+            return {"success": False, "error": f"API Error: {e.response.status_code}"}
+        except httpx.TimeoutException:
+            return {"success": False, "error": "Request timed out"}
+        except Exception as e:
+            return {"success": False, "error": f"Server Error: {str(e)}"}
+
+
 async def search_recalls(
     term: str = None, risk_level: str = None, limit: int = 5
 ) -> dict:
@@ -101,28 +123,21 @@ async def search_recalls(
     if risk_level:
         query_parts.append(f'classification:"{risk_level}"')
 
-    params = {"api_key": API_KEY, "limit": limit}
+    params = {"limit": limit}
     if query_parts:
         params["search"] = "+AND+".join(query_parts)
 
-    async with httpx.AsyncClient() as client:
-        try:
-            response = await client.get(url, params=params, timeout=TIMEOUT)
-            response.raise_for_status()
-            data = response.json()
+    result = await _make_fda_request(url, params)
 
-            if "results" not in data:
-                return {"success": True, "data": []}
+    if not result["success"]:
+        return result
 
-            clean_results = _filter_recall_data(data["results"])
-            return {"success": True, "data": clean_results}
+    data = result["data"]
+    if "results" not in data:
+        return {"success": True, "data": []}
 
-        except httpx.HTTPStatusError as e:
-            return {"success": False, "error": f"API Error: {e.response.status_code}"}
-        except httpx.TimeoutException:
-            return {"success": False, "error": "Request timed out"}
-        except Exception as e:
-            return {"success": False, "error": f"Server Error: {str(e)}"}
+    clean_results = _filter_recall_data(data["results"])
+    return {"success": True, "data": clean_results}
 
 
 async def get_recent_recalls(limit: int = 10) -> dict:
@@ -138,29 +153,21 @@ async def get_recent_recalls(limit: int = 10) -> dict:
     limit = min(max(1, limit), 100)
     url = f"{BASE_URL}/enforcement.json"
     params = {
-        "api_key": API_KEY,
         "sort": "report_date:desc",
         "limit": limit,
     }
 
-    async with httpx.AsyncClient() as client:
-        try:
-            response = await client.get(url, params=params, timeout=TIMEOUT)
-            response.raise_for_status()
-            data = response.json()
+    result = await _make_fda_request(url, params)
 
-            if "results" not in data:
-                return {"success": True, "data": []}
+    if not result["success"]:
+        return result
 
-            clean_results = _filter_recall_data(data["results"])
-            return {"success": True, "data": clean_results}
+    data = result["data"]
+    if "results" not in data:
+        return {"success": True, "data": []}
 
-        except httpx.HTTPStatusError as e:
-            return {"success": False, "error": f"API Error: {e.response.status_code}"}
-        except httpx.TimeoutException:
-            return {"success": False, "error": "Request timed out"}
-        except Exception as e:
-            return {"success": False, "error": f"Server Error: {str(e)}"}
+    clean_results = _filter_recall_data(data["results"])
+    return {"success": True, "data": clean_results}
 
 
 async def get_recalls_by_classification(classification: str, limit: int = 10) -> dict:
@@ -184,29 +191,21 @@ async def get_recalls_by_classification(classification: str, limit: int = 10) ->
     limit = min(max(1, limit), 100)
     url = f"{BASE_URL}/enforcement.json"
     params = {
-        "api_key": API_KEY,
         "search": f'classification:"{classification}"',
         "limit": limit,
     }
 
-    async with httpx.AsyncClient() as client:
-        try:
-            response = await client.get(url, params=params, timeout=TIMEOUT)
-            response.raise_for_status()
-            data = response.json()
+    result = await _make_fda_request(url, params)
 
-            if "results" not in data:
-                return {"success": True, "data": []}
+    if not result["success"]:
+        return result
 
-            clean_results = _filter_recall_data(data["results"])
-            return {"success": True, "data": clean_results}
+    data = result["data"]
+    if "results" not in data:
+        return {"success": True, "data": []}
 
-        except httpx.HTTPStatusError as e:
-            return {"success": False, "error": f"API Error: {e.response.status_code}"}
-        except httpx.TimeoutException:
-            return {"success": False, "error": "Request timed out"}
-        except Exception as e:
-            return {"success": False, "error": f"Server Error: {str(e)}"}
+    clean_results = _filter_recall_data(data["results"])
+    return {"success": True, "data": clean_results}
 
 
 async def search_drug_shortages(
@@ -224,7 +223,6 @@ async def search_drug_shortages(
         dict with 'success', 'data' or 'error' keys.
     """
     limit = min(max(1, limit), 100)
-    # NOTE: Adjust this URL to match your specific API endpoint for shortages
     url = f"{BASE_URL}/shortages.json" 
 
     # Build query dynamically
@@ -237,35 +235,25 @@ async def search_drug_shortages(
         query_parts.append(f'status:"{status}"')
 
     params = {"limit": limit}
-    # Add API_KEY if your specific endpoint requires it
-    if API_KEY: 
-        params["api_key"] = API_KEY
         
     if query_parts:
         params["search"] = "+AND+".join(query_parts)
 
-    async with httpx.AsyncClient() as client:
-        try:
-            response = await client.get(url, params=params, timeout=TIMEOUT)
-            response.raise_for_status()
-            data = response.json()
+    result = await _make_fda_request(url, params)
 
-            # Shortage APIs sometimes wrap results in "results" or return a list directly
-            # Adjust based on your exact API response structure
-            raw_results = data.get("results", []) if isinstance(data, dict) else data
+    if not result["success"]:
+        return result
 
-            if not raw_results:
-                return {"success": True, "data": []}
+    data = result["data"]
+    # Shortage APIs sometimes wrap results in "results" or return a list directly
+    # Adjust based on your exact API response structure
+    raw_results = data.get("results", []) if isinstance(data, dict) else data
 
-            clean_results = _filter_shortage_data(raw_results)
-            return {"success": True, "data": clean_results}
+    if not raw_results:
+        return {"success": True, "data": []}
 
-        except httpx.HTTPStatusError as e:
-            return {"success": False, "error": f"API Error: {e.response.status_code}"}
-        except httpx.TimeoutException:
-            return {"success": False, "error": "Request timed out"}
-        except Exception as e:
-            return {"success": False, "error": f"Server Error: {str(e)}"}
+    clean_results = _filter_shortage_data(raw_results)
+    return {"success": True, "data": clean_results}
 
 
 async def get_drug_label(term: str) -> dict:
@@ -281,68 +269,48 @@ async def get_drug_label(term: str) -> dict:
     if not term:
         return {"success": False, "error": "Drug name is required."}
 
-    print(f"🤖 Drug label search term: {term}")
-
     url = f"{BASE_URL}/label.json"
 
     # Build params dict - search brand OR generic name
     search_query = f'(openfda.brand_name:"{term}")+OR+(openfda.generic_name:"{term}")'
     params = {
-        "api_key": API_KEY,
         "limit": 1,
         "search": search_query,
     }
 
-    print(f"🔍 Search query: {search_query}")
-    print(f"🔗 Full URL: {url}?search={search_query}&limit=1")
+    result = await _make_fda_request(url, params)
 
-    async with httpx.AsyncClient() as client:
-        try:
-            response = await client.get(url, params=params, timeout=TIMEOUT)
+    if not result["success"]:
+        return result
 
-            print(f"📡 Response status: {response.status_code}")
+    data = result["data"]
+    if "results" not in data or not data["results"]:
+        return {"success": True, "data": []}
 
-            if response.status_code == 404:
-                return {"success": True, "data": []}
+    # Extract the first result
+    result = data["results"][0]
 
-            response.raise_for_status()
-            data = response.json()
+    # Safely get openfda object (could be None)
+    openfda = result.get("openfda") or {}
 
-            print(f"📦 Results found: {'results' in data and len(data.get('results', []))}")
+    # --- EXTRACT RELEVANT FIELDS ---
+    # We use .get(..., ["N/A"])[0] because most text fields are arrays of strings.
+    clean_data = {
+        "brand_name": openfda.get("brand_name", ["Unknown"])[0],
+        "generic_name": openfda.get("generic_name", ["Unknown"])[0],
+        "manufacturer": openfda.get("manufacturer_name", ["Unknown"])[0],
+        "pharm_class": openfda.get("pharm_class_cs", ["Unknown"])[0],
+        "indications_and_usage": result.get("indications_and_usage", ["N/A"])[0],
+        "warnings": result.get("warnings", ["N/A"])[0],
+        "adverse_reactions": result.get("adverse_reactions", ["N/A"])[0],
+        "drug_interactions": result.get("drug_interactions", ["N/A"])[0],
+        "dosage_and_administration": result.get("dosage_and_administration", ["N/A"])[0],
+    }
 
-            if "results" not in data or not data["results"]:
-                return {"success": True, "data": []}
+    # Truncate very long fields to prevent token overflow
+    for key, value in clean_data.items():
+        if isinstance(value, str) and len(value) > 1500:
+            clean_data[key] = value[:1500] + "... (truncated)"
 
-            # Extract the first result
-            result = data["results"][0]
-
-            # Safely get openfda object (could be None)
-            openfda = result.get("openfda") or {}
-
-            # --- EXTRACT RELEVANT FIELDS ---
-            # We use .get(..., ["N/A"])[0] because most text fields are arrays of strings.
-            clean_data = {
-                "brand_name": openfda.get("brand_name", ["Unknown"])[0],
-                "generic_name": openfda.get("generic_name", ["Unknown"])[0],
-                "manufacturer": openfda.get("manufacturer_name", ["Unknown"])[0],
-                "pharm_class": openfda.get("pharm_class_epc", ["Unknown"])[0],
-            }
-
-            # Truncate very long fields to prevent token overflow
-            for key, value in clean_data.items():
-                if isinstance(value, str) and len(value) > 1500:
-                    clean_data[key] = value[:1500] + "... (truncated)"
-
-            print(f"📋 clean_data: {clean_data}")
-
-            # Return as LIST to match other functions
-            return {"success": True, "data": [clean_data]}
-
-        except httpx.HTTPStatusError as e:
-            if e.response.status_code == 404:
-                return {"success": True, "data": []}
-            return {"success": False, "error": f"API Error: {e.response.status_code}"}
-        except httpx.TimeoutException:
-            return {"success": False, "error": "Request timed out"}
-        except Exception as e:
-            return {"success": False, "error": f"Server Error: {str(e)}"}
+    # Return as LIST to match other functions
+    return {"success": True, "data": [clean_data]}
