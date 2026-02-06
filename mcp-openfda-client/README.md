@@ -1,4 +1,6 @@
 1. Install dependencies:
+uv add google-genai
+
   uv sync
 
   2. Start the MCP server first (in one terminal):
@@ -18,3 +20,8 @@ API Endpoints:
   ├──────────┼────────┼────────────────────────────┤
   │ /health  │ GET    │ Check API status           │
   └──────────┴────────┴────────────────────────────┘
+
+
+  Other UV command
+  rm -rf .venv
+  uv venv

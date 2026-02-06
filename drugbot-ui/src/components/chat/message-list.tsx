@@ -56,7 +56,7 @@ export function MessageList({ messages, isLoading, onSendMessage }: MessageListP
 
   return (
     <ScrollArea className="flex-1 p-4" ref={scrollRef}>
-      <div className="flex flex-col gap-4 max-w-3xl mx-auto">
+      <div className="flex flex-col gap-4 max-w-6xl mx-auto px-2 md:px-6">
         {messages.length === 0 && !isLoading && (
           <motion.div
             className="flex flex-col items-center justify-center h-full py-16 text-center"
@@ -90,7 +90,7 @@ export function MessageList({ messages, isLoading, onSendMessage }: MessageListP
             </motion.p>
 
             <motion.div
-              className="grid grid-cols-1 sm:grid-cols-3 gap-3 w-full max-w-xl"
+              className="grid grid-cols-1 sm:grid-cols-3 gap-3 w-full max-w-2xl"
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.5 }}

@@ -46,7 +46,7 @@ export function ChatInput({ onSendMessage, isLoading }: ChatInputProps) {
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3 }}
     >
-      <div className="relative max-w-3xl mx-auto">
+      <div className="relative max-w-6xl mx-auto px-2 md:px-6">
         <Textarea
           ref={textareaRef}
           value={input}

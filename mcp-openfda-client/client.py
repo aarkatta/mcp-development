@@ -1,5 +1,4 @@
 import asyncio
-import json
 import os
 import uuid
 from contextlib import asynccontextmanager
@@ -9,6 +8,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+# Native Gemini SDK (Latest v1.0.0+)
 from google import genai
 from google.genai import types
 
@@ -16,177 +16,321 @@ from google.genai import types
 from mcp import ClientSession
 from mcp.client.sse import sse_client
 
+# Load environment variables
 load_dotenv()
 
 # --- CONFIGURATION ---
-REMOTE_SERVER_URL = "http://0.0.0.0:8000/sse"
-MODEL_NAME = "gemini-3-flash-preview"
+REMOTE_SERVER_URL = "http://00.0.0:8000/sse"
+MODEL_NAME = "gemini-3-pro-preview"
 
-client_llm = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
 
 # --- GLOBAL STATE ---
 mcp_session: Optional[ClientSession] = None
-gemini_tools: Optional[types.Tool] = None # Will store our native declarations
+gemini_client: Optional[genai.Client] = None
+
+# Simple in-memory session store: { "session_id": [messages_list] }
 user_sessions: Dict[str, List[types.Content]] = {}
 
-# --- HELPER: CONVERT MCP TO GEMINI NATIVE ---
-def mcp_to_gemini_declaration(mcp_tool) -> types.FunctionDeclaration:
-    """
-    Converts an MCP tool into a Gemini native FunctionDeclaration.
-    """
-    # Gemini expects a specific 'Schema' object for parameters
-    return types.FunctionDeclaration(
-        name=mcp_tool.name,
-        description=mcp_tool.description,
-        parameters=types.Schema(
-            type="OBJECT",
-            properties={
-                k: types.Schema(
-                    type=v.get("type", "string").upper(),
-                    description=v.get("description", "")
-                )
-                for k, v in mcp_tool.inputSchema.get("properties", {}).items()
-            },
-            required=mcp_tool.inputSchema.get("required", [])
+SYSTEM_INSTRUCTION_ARCHIVE = (
+    "You are an intelligent, proactive pharmaceutical assistant with access to official FDA data. "
+    "Your goal is to provide accurate, safety-critical information using strictly defined tools.\n\n"
+
+    "### AVAILABLE TOOLS\n"
+    "1) `get_drug_label`: Authoritative source for safety, usage, and warnings.\n"
+    "2) `search_drug_recalls`: Search for historical drug recall events for a specific drug.\n"
+    "3) `get_recent_drug_recalls`: Get a list of the latest FDA drug recall alerts.\n"
+    "4) `get_drug_recalls_by_classification`: Filter recalls by risk level (Class I, II, III).\n"
+    "5) `get_drug_shortages`: Check current supply status and shortage details.\n\n"
+
+    "### CORE AGENTIC WORKFLOW\n"
+    "1. CLARIFY & PLAN: Before calling a tool, ensure you have the specific drug name. "
+    "If the user's request is ambiguous (e.g., 'that heart medicine'), ask for the specific name first.\n"
+    "2. EXECUTE: Use the most relevant tool for the primary intent. "
+    "Do NOT guess—if a tool is needed, you must call it.\n"
+    "3. ANSWER & VERIFY: Provide a clear answer based *strictly* on the tool's output. "
+    "If the tool returns no data (e.g., 'No recalls found'), state that explicitly rather than hallucinating.\n"
+    "4. PROACTIVE SAFETY CHECK (Required):\n"
+    "   - After answering a safety/label question, ask: 'Would you like to check for recent recalls or shortages?'\n"
+    "   - After answering a shortage question, ask: 'Would you like to review safety warnings?'\n"
+    "   - After answering a recall question, ask: 'Would you like to see the risk classification?'\n"
+    "   - **Constraint:** Never run these extra checks automatically. Always ask for permission."
+)
+
+SYSTEM_INSTRUCTION = """You are a pharmaceutical assistant with access to FDA drug databases. Your job is to provide clear, actionable safety information using real FDA data.
+
+### AVAILABLE FDA DATA SOURCES
+1. ADVERSE EVENTS: Side effects and patient safety reports.
+2. PRODUCT LABELING: Official prescribing info, dosage, and warnings.
+3. RECALL ENFORCEMENT: Recalls (Class I, II, or III) and reasons for removal.
+4. DRUG SHORTAGES: Current supply availability and manufacturer status.
+
+### CRITICAL OPERATING RULES
+
+1. HANDLING GENERAL RECALL QUERIES:
+- If a user asks "Are there any recalls?" or "What's new?", do NOT just ask for a drug name. 
+- ACTION: Call `get_critical_recalls(limit=25)` immediately to provide a high-level summary of the most urgent safety risks (Class I). This provides immediate value.
+
+2. HANDLING GENERAL SHORTAGE QUERIES:
+- If a user asks "Are there any drug shortages?" or "What drugs are unavailable?", do NOT just ask for a drug name.
+- ACTION: Call `get_current_drug_shortages(limit=25)` immediately to provide a summary of current supply disruptions. This provides immediate value.
+
+3. SPECIFICITY IS SAFETY:
+- When reporting a recall, always include:
+    * The REASON (e.g., "rodent activity" or "microbial contamination").
+    * The SCOPE: Is it a manufacturer recall or a distributor-level recall (e.g., Gold Star Distribution)?
+    * IDENTIFIERS: Always list Lot Numbers and Expiration Dates if available in the data.
+    * GEOGRAPHY: If the data mentions specific states (e.g., MN, IN, ND), tell the user.
+
+4. RISK COMMUNICATION:
+- Always define the Recall Class in plain language:
+    * Class I: Serious or life-threatening risk. Action: "Stop using immediately."
+    * Class II: Temporary or reversible health problems.
+    * Class III: Unlikely to cause adverse health consequences (e.g., minor packaging issues).
+
+5. TOOL PROTOCOL:
+- Maximum 2 tool calls per message.
+- Use `search_recalls` if a drug name is provided.
+- If a search for a common drug (e.g., Tylenol) returns a distributor recall, clarify that it may not affect all brands/bottles.
+
+### RESPONSE FORMAT
+1. DIRECT ANSWER: State the most critical findings first.
+2. LIST ALL RESULTS: When tool data returns multiple items (recalls, shortages, etc.), you MUST list EVERY item returned. Do NOT summarize or truncate. If the tool returns 10 recalls, show all 10. If it returns 25 shortages, show all 25.
+3. FORMATTING IS CRITICAL: Each recall or shortage MUST be its own numbered block separated by a blank line. Never run multiple items together in one paragraph. Use this exact markdown structure for EVERY item:
+
+**Item format for recalls:**
+
+1. **Product Name** — Recalling Firm
+   - Reason: [reason]
+   - Classification: [Class I/II/III]
+   - Distribution: [states/areas]
+   - Status: [Ongoing/Terminated]
+
+2. **Next Product Name** — Next Firm
+   - Reason: [reason]
+   - Classification: [Class I/II/III]
+   - Distribution: [states/areas]
+   - Status: [Ongoing/Terminated]
+
+**Item format for shortages:**
+
+1. **Drug Name** — Manufacturer
+   - Status: [Currently in Shortage / Resolved]
+   - Reason: [reason]
+   - Dosage Form: [tablet/capsule/etc.]
+
+4. SOURCE CITATION: "According to the FDA Recall Database..."
+5. ACTIONABLE ADVICE: Tell the user exactly what to look for on their bottle (Lot #) or where they bought it.
+6. PERMISSION-BASED FOLLOW-UP: Ask before diving into side effects or labels (e.g., "Would you like me to check the official dosage instructions for this medication?").
+
+### EXAMPLE OF CORRECT FORMATTING
+User: "Show me recent recalls"
+Assistant: "According to the FDA Recall Database, here are the most recent Class I recalls:
+
+1. **Acetaminophen Tablets 500mg** — PharmaCo Inc.
+   - Reason: Failed dissolution specifications
+   - Classification: Class I (Serious risk — stop using immediately)
+   - Distribution: Nationwide
+   - Status: Ongoing
+
+2. **Metformin HCl Extended-Release** — Generic Labs LLC
+   - Reason: NDMA impurity above acceptable limit
+   - Classification: Class I (Serious risk — stop using immediately)
+   - Distribution: CA, TX, NY, FL
+   - Status: Ongoing
+
+Would you like more details on any of these recalls?"
+"""
+
+def convert_mcp_to_gemini_tools(mcp_tools) -> List[types.Tool]:
+    """Convert MCP tool schemas to Gemini FunctionDeclaration format."""
+    function_declarations = []
+    for tool in mcp_tools.tools:
+        func_decl = types.FunctionDeclaration(
+            name=tool.name,
+            description=tool.description,
+            parameters_json_schema=tool.inputSchema
         )
-    )
+        function_declarations.append(func_decl)
+    return [types.Tool(function_declarations=function_declarations)]
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global mcp_session, gemini_tools
-    print(f"🔌 Connecting to MCP Server...")
+    """Handles MCP connection and Gemini Client initialization."""
+    global mcp_session, gemini_client
+
+    print(f"Connecting to MCP Server at {REMOTE_SERVER_URL}...")
     try:
+        # 1. Establish SSE Connection
         app.state.sse_streams = sse_client(REMOTE_SERVER_URL)
         streams = await app.state.sse_streams.__aenter__()
+
+        # 2. Initialize MCP Client Session
         app.state.client_session = ClientSession(streams[0], streams[1])
         mcp_session = await app.state.client_session.__aenter__()
         await mcp_session.initialize()
 
-        # 1. Fetch tools from MCP
-        mcp_tools_resp = await mcp_session.list_tools()
-        
-        # 2. Convert to Gemini Native Function Declarations
-        declarations = [mcp_to_gemini_declaration(t) for t in mcp_tools_resp.tools]
-        
-        # 3. Store as a Gemini Tool object
-        gemini_tools = [types.Tool(function_declarations=declarations)]
+        # 3. Fetch Tools
+        mcp_tools = await mcp_session.list_tools()
+        app.state.gemini_tools = convert_mcp_to_gemini_tools(mcp_tools)
 
-        print(f"✅ Loaded {len(declarations)} tools natively into Gemini format.")
+        # 4. Initialize Gemini Client
+        gemini_client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+
+        print(f"✓ Connected! Loaded {len(mcp_tools.tools)} tools:")
+        for tool in mcp_tools.tools:
+            print(f"  - {tool.name}")
+
         yield
+
+    except Exception as e:
+        print(f"✗ Startup failed: {e}")
+        raise e
     finally:
         if mcp_session:
             await app.state.client_session.__aexit__(None, None, None)
-        print("🔌 MCP Connection closed.")
+        if hasattr(app.state, "sse_streams"):
+            await app.state.sse_streams.__aexit__(None, None, None)
+        print("✓ Cleanup complete.")
 
-app = FastAPI(lifespan=lifespan)
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+
+app = FastAPI(title="OpenFDA Pharmaceutical Assistant", lifespan=lifespan)
+
+# Enable CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+# --- DATA MODELS ---
 
 class ChatRequest(BaseModel):
     message: str
     session_id: Optional[str] = None
 
+
+class ToolExecutionLog(BaseModel):
+    name: str
+    arguments: Dict[str, Any]
+    output: str
+
+
 class ChatResponse(BaseModel):
     response: str
     session_id: str
+    tools_used: Optional[List[ToolExecutionLog]] = None
+
+
+# --- ENDPOINTS ---
 
 @app.post("/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest):
-    global user_sessions
-
-    if not mcp_session or not gemini_tools:
-        raise HTTPException(status_code=503, detail="MCP Server not ready")
+    """
+    Main chat endpoint for pharmaceutical queries.
+    
+    Only calls tools when user explicitly requests information about a specific drug.
+    """
+    if not mcp_session or not gemini_client:
+        raise HTTPException(status_code=503, detail="Services not initialized")
 
     session_id = request.session_id or str(uuid.uuid4())
-    if session_id not in user_sessions:
-        user_sessions[session_id] = []
-
-    history = user_sessions[session_id]
-    
-    # Define the core system instruction
-    sys_inst = "You are a proactive FDA assistant. Use tools for all drug data. Always ask to check recalls/shortages after a label search."
-
-    # 1. Add User Message to History
-    user_msg = types.Content(role="user", parts=[types.Part(text=request.message)])
-    history.append(user_msg)
+    executed_tools = []
 
     try:
-        # 2. THE AGENTIC LOOP (Manual implementation of Tool Calling)
-        # A robust two-step process:
-        # 1. Call with tools to decide what actions to take.
-        # 2. If actions are taken, call again WITHOUT tools to summarize.
-
-        # --- Step 1: Call with tools ---
-        response = client_llm.models.generate_content(
+        # Create chat session
+        chat_session = gemini_client.aio.chats.create(
             model=MODEL_NAME,
-            contents=history,
+            history=user_sessions.get(session_id, []),
             config=types.GenerateContentConfig(
-                system_instruction=sys_inst,
-                tools=gemini_tools,
+                system_instruction=SYSTEM_INSTRUCTION,
+                tools=app.state.gemini_tools,
+                max_output_tokens=8192,
             )
         )
 
-        # Check if Gemini wants to call a tool
-        tool_calls = [p.function_call for p in response.candidates[0].content.parts if p.function_call]
+        # Send user message
+        response = await chat_session.send_message(request.message)
 
-        if not tool_calls:
-            # No tool calls? This is our final answer.
-            final_text = response.text
-            history.append(response.candidates[0].content)
-        else:
-            # --- Step 2: Execute tools and summarize ---
-            # Add the assistant's decision to call tools to history
-            history.append(response.candidates[0].content)
-            
-            tool_responses_parts = []
-            for call in tool_calls:
-                print(f"🔧 Calling tool: {call.name} with {call.args}")
-                
-                # Execute via MCP
-                mcp_res = await mcp_session.call_tool(call.name, call.args)
-                
-                # Extract the text from MCP result
-                output_text = "\n".join([c.text for c in mcp_res.content if c.type == "text"])
-                
-                # Create a FunctionResponse part
+        # Tool execution loop
+        max_turns = 10
+        for turn in range(max_turns):
+            if not response.function_calls:
+                break
+
+            tool_responses = []
+            for fc in response.function_calls:
+                print(f"[Turn {turn+1}] Calling: {fc.name}({fc.args})")
                 try:
-                    # The tool returns a JSON string, so we parse it
-                    parsed_output = json.loads(output_text)
-                    if isinstance(parsed_output, list):
-                        parsed_output = {'results': parsed_output}
-                except json.JSONDecodeError:
-                    # If it's not valid JSON, use the raw text
-                    parsed_output = {'result': output_text}
-                
-                tool_responses_parts.append(
-                    types.Part(
-                        function_response=types.FunctionResponse(
-                            name=call.name,
-                            response=parsed_output
+                    # Call MCP tool
+                    result = await mcp_session.call_tool(name=fc.name, arguments=fc.args)
+                    
+                    # Extract text
+                    tool_output = "\\n".join(
+                        [c.text for c in result.content if c.type == "text"]
+                    )
+                    
+                    # Log execution
+                    executed_tools.append(ToolExecutionLog(
+                        name=fc.name,
+                        arguments=fc.args,
+                        output=tool_output[:500]
+                    ))
+
+                    # Send result back
+                    tool_responses.append(
+                        types.Part.from_function_response(
+                            name=fc.name,
+                            response={"result": tool_output}
                         )
                     )
-                )
+                    
+                except Exception as e:
+                    print(f"  Error: {e}")
+                    tool_responses.append(
+                        types.Part.from_function_response(
+                            name=fc.name,
+                            response={"error": str(e)}
+                        )
+                    )
 
-            # Add the tool outputs back to history
-            history.append(types.Content(role="tool", parts=tool_responses_parts))
-            
-            # --- Step 3: Call again WITHOUT tools to force summarization ---
-            summary_response = client_llm.models.generate_content(
-                model=MODEL_NAME,
-                contents=history,
-                config=types.GenerateContentConfig(
-                    system_instruction=sys_inst,
-                    # No tools provided in this call
-                )
-            )
-            final_text = summary_response.text
-            history.append(summary_response.candidates[0].content)
+            # Continue conversation
+            response = await chat_session.send_message(tool_responses)
 
-        user_sessions[session_id] = history
-        return ChatResponse(response=final_text, session_id=session_id)
+        # Save history
+        user_sessions[session_id] = chat_session.get_history()
+
+        return ChatResponse(
+            response=response.text or "I couldn't provide an answer.",
+            session_id=session_id,
+            tools_used=executed_tools if executed_tools else None
+        )
 
     except Exception as e:
-        print(f"❌ Error in chat loop: {e}")
+        print(f"Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/session/{session_id}")
+async def clear_session(session_id: str):
+    """Clear conversation history."""
+    user_sessions.pop(session_id, None)
+    return {"status": "success"}
+
+
+@app.get("/health")
+async def health():
+    """Health check."""
+    return {
+        "status": "healthy",
+        "mcp": mcp_session is not None,
+        "gemini": gemini_client is not None,
+        "sessions": len(user_sessions)
+    }
+
 
 if __name__ == "__main__":
     import uvicorn
