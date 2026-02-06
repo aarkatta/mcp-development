@@ -4,7 +4,9 @@ import ReactMarkdown from 'react-markdown';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
 import { Message } from '@/lib/types';
-import { Bot, User } from 'lucide-react';
+import { Pill, User, Copy, Check } from 'lucide-react';
+import { useState } from 'react';
+import { Button } from '@/components/ui/button';
 
 interface MessageBubbleProps {
   message: Message;
@@ -12,42 +14,70 @@ interface MessageBubbleProps {
 
 export function MessageBubble({ message }: MessageBubbleProps) {
   const isUser = message.role === 'user';
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    await navigator.clipboard.writeText(message.content);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
 
   return (
     <div
       className={cn(
-        'flex gap-3 w-full',
+        'group flex gap-3 w-full',
         isUser ? 'justify-end' : 'justify-start'
       )}
     >
       {!isUser && (
-        <Avatar className="h-8 w-8 shrink-0">
-          <AvatarFallback className="bg-primary text-primary-foreground">
-            <Bot className="h-4 w-4" />
+        <Avatar className="h-8 w-8 shrink-0 mt-1">
+          <AvatarFallback className="ai-gradient-bg text-white">
+            <Pill className="h-4 w-4" />
           </AvatarFallback>
         </Avatar>
       )}
 
-      <div
-        className={cn(
-          'max-w-[80%] rounded-2xl px-4 py-2 text-sm',
-          isUser
-            ? 'bg-primary text-primary-foreground'
-            : 'bg-muted text-foreground'
-        )}
-      >
-        {isUser ? (
-          <p className="whitespace-pre-wrap break-words">{message.content}</p>
-        ) : (
-          <div className="prose prose-sm dark:prose-invert max-w-none prose-p:my-1 prose-ul:my-1 prose-li:my-0 prose-strong:text-foreground prose-headings:text-foreground">
-            <ReactMarkdown>{message.content}</ReactMarkdown>
+      <div className="flex flex-col gap-1 max-w-[80%]">
+        <div
+          className={cn(
+            'rounded-2xl px-4 py-2.5 text-sm',
+            isUser
+              ? 'ai-gradient-bg text-white'
+              : 'bg-card border text-card-foreground shadow-sm'
+          )}
+        >
+          {isUser ? (
+            <p className="whitespace-pre-wrap break-words">{message.content}</p>
+          ) : (
+            <div className="prose prose-sm dark:prose-invert max-w-none prose-p:my-1.5 prose-ul:my-1.5 prose-ol:my-1.5 prose-li:my-0.5 prose-strong:text-card-foreground prose-headings:text-card-foreground prose-a:text-primary prose-code:text-primary prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:text-xs">
+              <ReactMarkdown>{message.content}</ReactMarkdown>
+            </div>
+          )}
+        </div>
+
+        {/* Action buttons for assistant messages */}
+        {!isUser && (
+          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground"
+              onClick={handleCopy}
+            >
+              {copied ? (
+                <Check className="h-3 w-3 mr-1" />
+              ) : (
+                <Copy className="h-3 w-3 mr-1" />
+              )}
+              {copied ? 'Copied' : 'Copy'}
+            </Button>
           </div>
         )}
       </div>
 
       {isUser && (
-        <Avatar className="h-8 w-8 shrink-0">
-          <AvatarFallback className="bg-secondary">
+        <Avatar className="h-8 w-8 shrink-0 mt-1">
+          <AvatarFallback className="bg-secondary text-secondary-foreground">
             <User className="h-4 w-4" />
           </AvatarFallback>
         </Avatar>
