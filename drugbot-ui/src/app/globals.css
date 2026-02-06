@@ -127,72 +127,78 @@
   }
 }
 
-/* AI gradient text utility */
-.ai-gradient-text {
+/* AI gradient utilities - Tailwind v4 @utility syntax */
+@utility ai-gradient-text {
   background: linear-gradient(135deg, #7c3aed, #3b82f6, #06b6d4);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
 }
 
-.dark .ai-gradient-text {
-  background: linear-gradient(135deg, #a78bfa, #60a5fa, #22d3ee);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
-
-/* AI gradient background utility */
-.ai-gradient-bg {
+@utility ai-gradient-bg {
   background: linear-gradient(135deg, #7c3aed, #3b82f6, #06b6d4);
 }
 
-.dark .ai-gradient-bg {
-  background: linear-gradient(135deg, #8b5cf6, #3b82f6, #06b6d4);
-}
-
-/* AI gradient border glow */
-.ai-gradient-border {
+@utility ai-gradient-border {
   position: relative;
 }
 
-.ai-gradient-border::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  padding: 1.5px;
-  background: linear-gradient(135deg, #7c3aed, #3b82f6, #06b6d4);
-  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-  mask-composite: exclude;
-  -webkit-mask-composite: xor;
-  pointer-events: none;
-}
-
-.dark .ai-gradient-border::before {
-  background: linear-gradient(135deg, #a78bfa, #60a5fa, #22d3ee);
-}
-
-/* AI icon color classes */
-.ai-icon-purple {
+@utility ai-icon-purple {
   color: #7c3aed;
 }
-.dark .ai-icon-purple {
-  color: #a78bfa;
-}
 
-.ai-icon-blue {
+@utility ai-icon-blue {
   color: #3b82f6;
 }
-.dark .ai-icon-blue {
-  color: #60a5fa;
-}
 
-.ai-icon-teal {
+@utility ai-icon-teal {
   color: #06b6d4;
 }
-.dark .ai-icon-teal {
-  color: #22d3ee;
+
+/* Dark mode overrides for AI colors */
+@layer base {
+  .dark .ai-gradient-text {
+    background: linear-gradient(135deg, #a78bfa, #60a5fa, #22d3ee);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .dark .ai-gradient-bg {
+    background: linear-gradient(135deg, #8b5cf6, #3b82f6, #06b6d4);
+  }
+
+  .dark .ai-icon-purple {
+    color: #a78bfa;
+  }
+
+  .dark .ai-icon-blue {
+    color: #60a5fa;
+  }
+
+  .dark .ai-icon-teal {
+    color: #22d3ee;
+  }
+}
+
+/* AI gradient border pseudo-element (can't use @utility for ::before) */
+@layer components {
+  .ai-gradient-border::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1.5px;
+    background: linear-gradient(135deg, #7c3aed, #3b82f6, #06b6d4);
+    mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    mask-composite: exclude;
+    -webkit-mask-composite: xor;
+    pointer-events: none;
+  }
+
+  .dark .ai-gradient-border::before {
+    background: linear-gradient(135deg, #a78bfa, #60a5fa, #22d3ee);
+  }
 }
 
 /* Custom scrollbar styling */
