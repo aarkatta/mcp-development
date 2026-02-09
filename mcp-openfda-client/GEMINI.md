@@ -26,3 +26,11 @@ The system prompt (in `client.py`) enforces a specific behavior loop:
 * **Tool Loop:** The client performs a 2-step LLM call:
     * Step A: Decide which tools to call.
     * Step B: Summarize tool outputs for the user.
+
+## Deployment. N
+## Note that the build commands were executed from their respective project directories, while deploy commands can be run from any configured project directory.
+  
+  gcloud builds submit --region=us-central1 --tag  us-central1-docker.pkg.dev/mcp-openfda-server/remote-mcp-servers/mcp-client:latest --project=mcp-openfda-server
+  gcloud run deploy  mcp-client --image us-central1-docker.pkg.dev/mcp-openfda-server/remote-mcp-servers/mcp-client:latest --region=us-central1 --allow-unauthenticated
+  --project=mcp-openfda-server
+  

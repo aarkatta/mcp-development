@@ -1,23 +1,29 @@
-# Use a slim Python base image based on the project's requirements
+# Use a slim Python base image compatible with your project's 3.12 requirement
 FROM python:3.12-slim
+
+# Copy uv directly from the official image for a faster, more reliable installation
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
 # Set the working directory inside the container
 WORKDIR /app
 
-# Install uv, the package manager used in the project, which is faster than pip
-RUN pip install uv
-
-# Copy the dependency definition files
+# Copy the dependency definition files first to leverage Docker layer caching
 COPY pyproject.toml uv.lock .python-version ./
 
 # Install dependencies using the lock file for reproducible builds
-RUN uv pip sync --no-cache uv.lock
+# 'uv sync' is used here to match the Google Cloud recommended workflow
+RUN uv sync --frozen --no-cache
 
 # Copy the rest of the application source code
 COPY . .
 
-# Expose the port that the server will run on
+# Allow statements and log messages to immediately appear in the logs
+ENV PYTHONUNBUFFERED=1
+
+# Cloud Run sets the PORT environment variable at runtime
+# Your server.py is configured to listen on 8000, but Cloud Run defaults to 8000
+# You can override this in the 'gcloud run deploy' command or update server.py
 EXPOSE 8000
 
-# The command to run the application when the container starts
-CMD ["python", "server.py"]
+# The command to run the application using uv to ensure the virtual environment is used
+CMD ["uv", "run", "server.py"]

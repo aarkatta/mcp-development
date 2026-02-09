@@ -1,3 +1,4 @@
+
 import asyncio
 import os
 import uuid
@@ -20,7 +21,7 @@ from mcp.client.sse import sse_client
 load_dotenv()
 
 # --- CONFIGURATION ---
-REMOTE_SERVER_URL = "http://00.0.0:8000/sse"
+REMOTE_SERVER_URL = "https://mcp-server-722021783439.us-central1.run.app/sse"
 MODEL_NAME = "gemini-3-pro-preview"
 
 
@@ -154,38 +155,66 @@ def convert_mcp_to_gemini_tools(mcp_tools) -> List[types.Tool]:
     return [types.Tool(function_declarations=function_declarations)]
 
 
+async def connect_mcp(app: FastAPI, max_retries: int = 5, base_delay: float = 2.0):
+    """Connect to MCP server with retries for Cloud Run cold-start race conditions."""
+    global mcp_session
+
+    for attempt in range(1, max_retries + 1):
+        try:
+            print(f"[Attempt {attempt}/{max_retries}] Connecting to MCP Server at {REMOTE_SERVER_URL}...")
+            app.state.sse_streams = sse_client(REMOTE_SERVER_URL)
+            streams = await app.state.sse_streams.__aenter__()
+
+            app.state.client_session = ClientSession(streams[0], streams[1])
+            mcp_session = await app.state.client_session.__aenter__()
+            await mcp_session.initialize()
+
+            mcp_tools = await mcp_session.list_tools()
+            app.state.gemini_tools = convert_mcp_to_gemini_tools(mcp_tools)
+
+            print(f"✓ Connected! Loaded {len(mcp_tools.tools)} tools:")
+            for tool in mcp_tools.tools:
+                print(f"  - {tool.name}")
+            return
+        except Exception as e:
+            print(f"✗ Attempt {attempt} failed: {e}")
+            # Clean up partial connections before retrying
+            if mcp_session:
+                try:
+                    await app.state.client_session.__aexit__(None, None, None)
+                except Exception:
+                    pass
+                mcp_session = None
+            if hasattr(app.state, "sse_streams"):
+                try:
+                    await app.state.sse_streams.__aexit__(None, None, None)
+                except Exception:
+                    pass
+            if attempt < max_retries:
+                delay = base_delay * attempt
+                print(f"  Retrying in {delay}s...")
+                await asyncio.sleep(delay)
+
+    raise RuntimeError(f"Failed to connect to MCP server after {max_retries} attempts")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Handles MCP connection and Gemini Client initialization."""
-    global mcp_session, gemini_client
+    global gemini_client
 
-    print(f"Connecting to MCP Server at {REMOTE_SERVER_URL}...")
     try:
-        # 1. Establish SSE Connection
-        app.state.sse_streams = sse_client(REMOTE_SERVER_URL)
-        streams = await app.state.sse_streams.__aenter__()
-
-        # 2. Initialize MCP Client Session
-        app.state.client_session = ClientSession(streams[0], streams[1])
-        mcp_session = await app.state.client_session.__aenter__()
-        await mcp_session.initialize()
-
-        # 3. Fetch Tools
-        mcp_tools = await mcp_session.list_tools()
-        app.state.gemini_tools = convert_mcp_to_gemini_tools(mcp_tools)
-
-        # 4. Initialize Gemini Client
+        # 1. Initialize Gemini Client (independent of MCP)
         gemini_client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
-        print(f"✓ Connected! Loaded {len(mcp_tools.tools)} tools:")
-        for tool in mcp_tools.tools:
-            print(f"  - {tool.name}")
+        # 2. Connect to MCP server with retries
+        await connect_mcp(app)
 
         yield
 
     except Exception as e:
         print(f"✗ Startup failed: {e}")
-        raise e
+        raise
     finally:
         if mcp_session:
             await app.state.client_session.__aexit__(None, None, None)
@@ -332,6 +361,4 @@ async def health():
     }
 
 
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8080)
+

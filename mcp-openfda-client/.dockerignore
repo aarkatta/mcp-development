@@ -15,6 +15,3 @@ __pycache__/
 .git
 GEMINI.md
 README.md
-uv.lock
-pyproject.toml
-.python-version

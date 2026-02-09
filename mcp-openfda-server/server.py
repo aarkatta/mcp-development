@@ -13,6 +13,8 @@ All tools return optimized JSON responses (60-80% token reduction vs raw API).
 from fastmcp import FastMCP
 import json
 import openfda_api
+import asyncio
+import os
 
 mcp = FastMCP("OpenFDA Remote Server")
 
@@ -403,4 +405,11 @@ async def search_shortages_by_manufacturer(manufacturer: str, limit: int = 15) -
 # ============================================================================
 
 if __name__ == "__main__":
-    mcp.run(transport="sse", host="0.0.0.0", port=8000)
+    # Get the port from the environment variable, defaulting to 8000
+    port = int(os.getenv("PORT", 8080))
+    asyncio.run(
+    mcp.run_async(
+        transport="sse",
+        host="0.0.0.0",  # Required for Cloud Run to route traffic
+        port=port
+    ))

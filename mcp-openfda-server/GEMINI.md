@@ -23,3 +23,26 @@ The agent has access to these specific tools (defined in `server.py`):
 * **Tool Definitions:** Always use the `@mcp.tool()` decorator from `FastMCP`.
 * **Error Handling:** If `openfda_api` returns `success: False`, return the error string directly to the agent so it can explain it to the user.
 * **Data Formatting:** Always return `json.dumps(result["data"], indent=2)` for complex data so the LLM can parse it easily.
+
+## gcloud Deployment
+
+## Artifact repository to store the container image.
+gcloud artifacts repositories create remote-mcp-servers \
+  --repository-format=docker \
+  --location=us-central1 \
+  --description="Repository for remote MCP servers" \
+  --project=mcp-openfda-server
+
+  ## Build the image
+  gcloud builds submit --region=us-central1 --tag us-central1-docker.pkg.dev/mcp-openfda-server/remote-mcp-servers/mcp-server:latest
+
+  
+## Deploy MCP server t ocloud run
+gcloud run deploy mcp-server \
+  --image us-central1-docker.pkg.dev/mcp-openfda-server/remote-mcp-servers/mcp-server:latest \
+  --region=us-central1 \
+  --no-allow-unauthenticated
+
+## MCP server URL
+Service [mcp-server] revision [mcp-server-00004-b62] has been deployed and is serving 100 percent of traffic.
+Service URL: https://mcp-server-722021783439.us-central1.run.app
