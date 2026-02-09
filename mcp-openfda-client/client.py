@@ -21,7 +21,8 @@ from mcp.client.sse import sse_client
 load_dotenv()
 
 # --- CONFIGURATION ---
-REMOTE_SERVER_URL = "https://mcp-server-722021783439.us-central1.run.app/sse"
+# REMOTE_SERVER_URL = "https://mcp-server-722021783439.us-central1.run.app/sse"
+REMOTE_SERVER_URL = "http://0.0.0.0:8080/sse"
 MODEL_NAME = "gemini-3-pro-preview"
 
 
@@ -69,11 +70,11 @@ SYSTEM_INSTRUCTION = """You are a pharmaceutical assistant with access to FDA dr
 
 1. HANDLING GENERAL RECALL QUERIES:
 - If a user asks "Are there any recalls?" or "What's new?", do NOT just ask for a drug name. 
-- ACTION: Call `get_critical_recalls(limit=25)` immediately to provide a high-level summary of the most urgent safety risks (Class I). This provides immediate value.
+- ACTION: Call `get_critical_recalls(limit=5)` immediately to provide a high-level summary of the most urgent safety risks (Class I). This provides immediate value.
 
 2. HANDLING GENERAL SHORTAGE QUERIES:
 - If a user asks "Are there any drug shortages?" or "What drugs are unavailable?", do NOT just ask for a drug name.
-- ACTION: Call `get_current_drug_shortages(limit=25)` immediately to provide a summary of current supply disruptions. This provides immediate value.
+- ACTION: Call `get_current_drug_shortages(limit=5)` immediately to provide a summary of current supply disruptions. This provides immediate value.
 
 3. SPECIFICITY IS SAFETY:
 - When reporting a recall, always include:

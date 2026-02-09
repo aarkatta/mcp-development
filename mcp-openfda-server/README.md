@@ -17,8 +17,8 @@ gcloud artifacts repositories create remote-mcp-servers \
 ## Deploy MCP server t ocloud run
 gcloud run deploy mcp-server \
   --image us-central1-docker.pkg.dev/mcp-openfda-server/remote-mcp-servers/mcp-server:latest \
-  --region=us-central1 \
-  --no-allow-unauthenticated
+  --region=us-central1 \  
+  --allow-unauthenticated
 
 ## MCP server URL
 Service [mcp-server] revision [mcp-server-00004-b62] has been deployed and is serving 100 percent of traffic.

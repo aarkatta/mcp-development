@@ -21,9 +21,9 @@ COPY . .
 ENV PYTHONUNBUFFERED=1
 
 # Cloud Run sets the PORT environment variable at runtime
-# Your client.py is configured to listen on 8080
-EXPOSE 8080
+# Your client.py is configured to listen on 9080
+EXPOSE 9080
 
 # The command to run the application using uv to ensure the virtual environment is used
 # Use shell form so $PORT env var (set by Cloud Run) is resolved at runtime
-CMD uv run uvicorn client:app --host 0.0.0.0 --port ${PORT:-8080}
+CMD uv run uvicorn client:app --host 0.0.0.0 --port ${PORT:-9080}

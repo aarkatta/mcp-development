@@ -595,8 +595,7 @@ async def get_recent_drug_recalls(limit: int = 50) -> dict:
         return {"success": True, "data": []}
     
     clean_results = filter_recall_enforcement_data(data["results"])
-    print(f"Found {len(clean_results)} recalls get_recent_drug_recalls")
-    print(f" {clean_results}")
+    print(f"Found {len(clean_results)} recent recalls")    
    
     return {"success": True, "data": clean_results}
 
@@ -652,8 +651,7 @@ async def get_recalls_by_classification(
         return {"success": True, "data": []}
     
     clean_results = filter_recall_enforcement_data(data["results"])
-    print(f"Found {len(clean_results)} recalls with classification {classification}")    
-    print(f" {clean_results}")
+    print(f"Found {len(clean_results)} recalls with classification {classification}")        
     return {"success": True, "data": clean_results}
 
 
@@ -701,7 +699,6 @@ async def get_voluntary_recalls(limit: int = 50) -> dict:
     
     clean_results = filter_recall_enforcement_data(data["results"])
     print(f"Found {len(clean_results)} recalls that are voluntary")
-    print(f"Clean Results {clean_results} ")
     return {"success": True, "data": clean_results}
 
 
@@ -826,7 +823,6 @@ async def get_current_drug_shortages(limit: int = 100) -> dict:
     
     
     clean_results = filter_drug_shortages_data(filtered_results)
-    print(f" {clean_results}")
     return {"success": True, "data": clean_results}
 
 async def search_shortage_by_manufacturer(

@@ -27,10 +27,11 @@ API Endpoints:
   uv venv
 
 
-  ## Deployment. N
+  ## Deployment
   ## Note that the build commands were executed from their respective project directories, while deploy commands can be run from any configured project directory.
   
   gcloud builds submit --region=us-central1 --tag  us-central1-docker.pkg.dev/mcp-openfda-server/remote-mcp-servers/mcp-client:latest --project=mcp-openfda-server
+  
   gcloud run deploy  mcp-client --image us-central1-docker.pkg.dev/mcp-openfda-server/remote-mcp-servers/mcp-client:latest --region=us-central1 --allow-unauthenticated
   --project=mcp-openfda-server
 
@@ -39,4 +40,4 @@ API Endpoints:
     --region=us-central1 \
     --allow-unauthenticated \
     --project=mcp-openfda-server \
-    --set-env-vars="GEMINI_API_KEY=AIzaSyD4Z6PkFmNuuAJ0mB3TltrhZbDhO38UlE8"
+    --set-env-vars="GEMINI_API_KEY=api_key
