@@ -21,8 +21,7 @@ from mcp.client.sse import sse_client
 load_dotenv()
 
 # --- CONFIGURATION ---
-REMOTE_SERVER_URL = "https://mcp-server-722021783439.us-central1.run.app/sse"
-# REMOTE_SERVER_URL = "http://0.0.0.0:8080/sse"
+REMOTE_SERVER_URL = os.getenv("REMOTE_SERVER_URL", "http://0.0.0.0:8000/sse")
 MODEL_NAME = "gemini-3-pro-preview"
 
 @asynccontextmanager

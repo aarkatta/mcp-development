@@ -20,9 +20,8 @@ COPY . .
 # Allow statements and log messages to immediately appear in the logs
 ENV PYTHONUNBUFFERED=1
 
-# Cloud Run sets the PORT environment variable at runtime
-# Your server.py is configured to listen on 8000, but Cloud Run defaults to 8000
-# You can override this in the 'gcloud run deploy' command or update server.py
+# Set the server port to 8000 to avoid conflicts with other containers using 8080
+ENV PORT=8000
 EXPOSE 8000
 
 # The command to run the application using uv to ensure the virtual environment is used

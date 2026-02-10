@@ -3,8 +3,7 @@
 import { useState, useCallback, useRef } from 'react';
 import { Message } from '@/lib/types';
 
-// const MCP_CLIENT_URL = 'http://localhost:9080/chat';
-const MCP_CLIENT_URL = 'https://mcp-client-722021783439.us-central1.run.app/chat';
+const MCP_CLIENT_URL = process.env.NEXT_PUBLIC_MCP_CLIENT_URL || 'http://localhost:9080/chat';
 
 function generateId(): string {
   return Math.random().toString(36).substring(2, 9);
