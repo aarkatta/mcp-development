@@ -1,0 +1,895 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DrugBot MCP Architecture - End to End</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: #0f172a;
+      color: #e2e8f0;
+      overflow: hidden;
+      height: 100vh;
+    }
+
+    /* ── Slider Container ── */
+    .slider-wrapper {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    .slides {
+      display: flex;
+      transition: transform 0.6s cubic-bezier(.4,0,.2,1);
+      height: 100%;
+    }
+
+    .slide {
+      min-width: 100vw;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 40px 60px;
+      position: relative;
+    }
+
+    /* ── Navigation ── */
+    .nav-bar {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      padding: 14px 24px;
+      background: rgba(15, 23, 42, 0.92);
+      backdrop-filter: blur(12px);
+      border-top: 1px solid rgba(99,102,241,0.2);
+      z-index: 100;
+    }
+
+    .nav-btn {
+      background: rgba(99,102,241,0.15);
+      border: 1px solid rgba(99,102,241,0.3);
+      color: #a5b4fc;
+      padding: 8px 20px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: all 0.2s;
+    }
+    .nav-btn:hover { background: rgba(99,102,241,0.3); color: #fff; }
+    .nav-btn:disabled { opacity: 0.3; cursor: default; }
+
+    .dots {
+      display: flex;
+      gap: 8px;
+    }
+    .dot {
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      background: rgba(99,102,241,0.25);
+      cursor: pointer;
+      transition: all 0.3s;
+      border: none;
+    }
+    .dot.active { background: #818cf8; transform: scale(1.3); }
+
+    .slide-counter {
+      color: #64748b;
+      font-size: 13px;
+      min-width: 50px;
+      text-align: center;
+    }
+
+    /* ── Common Slide Styles ── */
+    .slide-title {
+      font-size: 28px;
+      font-weight: 700;
+      margin-bottom: 6px;
+      background: linear-gradient(135deg, #818cf8, #6ee7b7);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      text-align: center;
+    }
+
+    .slide-subtitle {
+      font-size: 14px;
+      color: #64748b;
+      margin-bottom: 30px;
+      text-align: center;
+    }
+
+    /* ── Slide 1: Title ── */
+    .title-slide {
+      background: radial-gradient(ellipse at center, #1e1b4b 0%, #0f172a 70%);
+    }
+    .title-slide .logo { font-size: 64px; margin-bottom: 16px; }
+    .title-slide h1 {
+      font-size: 52px;
+      font-weight: 800;
+      background: linear-gradient(135deg, #818cf8, #34d399);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 12px;
+    }
+    .title-slide .tagline {
+      font-size: 20px;
+      color: #94a3b8;
+      max-width: 600px;
+      text-align: center;
+      line-height: 1.6;
+    }
+    .title-slide .tech-badges {
+      display: flex;
+      gap: 12px;
+      margin-top: 32px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    .badge {
+      padding: 6px 16px;
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: 500;
+    }
+    .badge-purple { background: rgba(99,102,241,0.15); color: #a5b4fc; border: 1px solid rgba(99,102,241,0.3); }
+    .badge-green  { background: rgba(52,211,153,0.12); color: #6ee7b7; border: 1px solid rgba(52,211,153,0.25); }
+    .badge-blue   { background: rgba(56,189,248,0.12); color: #7dd3fc; border: 1px solid rgba(56,189,248,0.25); }
+    .badge-amber  { background: rgba(251,191,36,0.12); color: #fcd34d; border: 1px solid rgba(251,191,36,0.25); }
+
+    /* ── Slide 2: High-Level Architecture ── */
+    .arch-flow {
+      display: flex;
+      align-items: center;
+      gap: 0;
+      flex-wrap: nowrap;
+      max-width: 1200px;
+    }
+
+    .arch-box {
+      background: rgba(30, 41, 59, 0.8);
+      border: 1px solid rgba(99,102,241,0.2);
+      border-radius: 16px;
+      padding: 24px 20px;
+      text-align: center;
+      min-width: 180px;
+      max-width: 220px;
+      position: relative;
+      transition: all 0.3s;
+    }
+    .arch-box:hover { border-color: rgba(99,102,241,0.5); transform: translateY(-4px); }
+
+    .arch-box .icon { font-size: 36px; margin-bottom: 10px; }
+    .arch-box .label { font-size: 15px; font-weight: 600; color: #e2e8f0; margin-bottom: 4px; }
+    .arch-box .sublabel { font-size: 11px; color: #64748b; line-height: 1.4; }
+
+    .arch-arrow {
+      font-size: 28px;
+      color: #4f46e5;
+      padding: 0 8px;
+      flex-shrink: 0;
+    }
+
+    .arch-arrow-label {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 0 4px;
+      flex-shrink: 0;
+    }
+    .arch-arrow-label .protocol {
+      font-size: 10px;
+      color: #818cf8;
+      background: rgba(99,102,241,0.1);
+      padding: 2px 8px;
+      border-radius: 10px;
+      margin-bottom: 4px;
+      white-space: nowrap;
+    }
+
+    /* ── Slide 3: Detailed Component ── */
+    .detail-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 24px;
+      max-width: 1100px;
+      width: 100%;
+    }
+
+    .detail-card {
+      background: rgba(30, 41, 59, 0.7);
+      border: 1px solid rgba(99,102,241,0.15);
+      border-radius: 14px;
+      padding: 24px;
+      transition: all 0.3s;
+    }
+    .detail-card:hover { border-color: rgba(99,102,241,0.4); }
+
+    .detail-card .card-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+    .detail-card .card-icon {
+      width: 40px; height: 40px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+    }
+    .detail-card .card-title { font-size: 16px; font-weight: 600; }
+    .detail-card .card-tech { font-size: 11px; color: #818cf8; }
+
+    .detail-card ul {
+      list-style: none;
+      padding: 0;
+    }
+    .detail-card li {
+      font-size: 12.5px;
+      color: #94a3b8;
+      padding: 4px 0;
+      padding-left: 16px;
+      position: relative;
+      line-height: 1.5;
+    }
+    .detail-card li::before {
+      content: '▸';
+      position: absolute;
+      left: 0;
+      color: #4f46e5;
+    }
+
+    .icon-purple { background: rgba(99,102,241,0.15); }
+    .icon-green  { background: rgba(52,211,153,0.12); }
+    .icon-blue   { background: rgba(56,189,248,0.12); }
+
+    /* ── Slide 4: Data Flow ── */
+    .flow-container {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      max-width: 900px;
+      width: 100%;
+      align-items: center;
+    }
+
+    .flow-step {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      width: 100%;
+      max-width: 750px;
+    }
+
+    .flow-num {
+      width: 36px; height: 36px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+
+    .flow-content {
+      flex: 1;
+      background: rgba(30, 41, 59, 0.6);
+      border: 1px solid rgba(99,102,241,0.12);
+      border-radius: 10px;
+      padding: 12px 18px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .flow-content .flow-text { font-size: 13px; color: #cbd5e1; }
+    .flow-content .flow-text strong { color: #e2e8f0; }
+    .flow-content .flow-badge {
+      font-size: 10px;
+      padding: 3px 10px;
+      border-radius: 12px;
+      white-space: nowrap;
+    }
+
+    .flow-connector {
+      width: 2px;
+      height: 12px;
+      background: rgba(99,102,241,0.25);
+      margin-left: 17px;
+    }
+
+    .fn-purple { background: rgba(99,102,241,0.2); color: #a5b4fc; }
+    .fn-green  { background: rgba(52,211,153,0.15); color: #6ee7b7; }
+    .fn-blue   { background: rgba(56,189,248,0.15); color: #7dd3fc; }
+    .fn-amber  { background: rgba(251,191,36,0.15); color: #fcd34d; }
+    .fn-rose   { background: rgba(244,63,94,0.15); color: #fda4af; }
+    .fn-cyan   { background: rgba(34,211,238,0.15); color: #67e8f9; }
+
+    /* ── Slide 5: MCP Tools ── */
+    .tools-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+      max-width: 1100px;
+      width: 100%;
+    }
+
+    .tool-group {
+      background: rgba(30, 41, 59, 0.6);
+      border: 1px solid rgba(99,102,241,0.12);
+      border-radius: 12px;
+      padding: 18px;
+    }
+
+    .tool-group-title {
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .tool-item {
+      font-size: 11.5px;
+      padding: 6px 10px;
+      margin-bottom: 6px;
+      border-radius: 6px;
+      background: rgba(15, 23, 42, 0.6);
+      color: #94a3b8;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+    }
+    .tool-item code {
+      color: #818cf8;
+      font-size: 11px;
+    }
+
+    /* ── Slide 6: Deployment ── */
+    .deploy-layout {
+      display: flex;
+      gap: 40px;
+      max-width: 1100px;
+      width: 100%;
+      align-items: flex-start;
+    }
+
+    .deploy-col {
+      flex: 1;
+    }
+
+    .deploy-card {
+      background: rgba(30, 41, 59, 0.6);
+      border: 1px solid rgba(99,102,241,0.12);
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 16px;
+    }
+
+    .deploy-card h3 {
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .deploy-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 6px 0;
+      border-bottom: 1px solid rgba(99,102,241,0.06);
+      font-size: 12px;
+    }
+    .deploy-row:last-child { border-bottom: none; }
+    .deploy-row .key { color: #64748b; }
+    .deploy-row .val { color: #cbd5e1; font-family: monospace; font-size: 11px; }
+
+    .env-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    .env-table td {
+      padding: 5px 8px;
+      font-size: 11px;
+      border-bottom: 1px solid rgba(99,102,241,0.06);
+    }
+    .env-table td:first-child { color: #818cf8; font-family: monospace; white-space: nowrap; }
+    .env-table td:last-child { color: #94a3b8; }
+
+    /* ── Slide 7: Summary ── */
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 20px;
+      max-width: 1000px;
+    }
+
+    .summary-card {
+      background: rgba(30, 41, 59, 0.6);
+      border: 1px solid rgba(99,102,241,0.12);
+      border-radius: 12px;
+      padding: 22px;
+      text-align: center;
+      transition: all 0.3s;
+    }
+    .summary-card:hover { border-color: rgba(99,102,241,0.4); transform: translateY(-3px); }
+    .summary-card .s-icon { font-size: 32px; margin-bottom: 10px; }
+    .summary-card .s-title { font-size: 15px; font-weight: 600; margin-bottom: 6px; }
+    .summary-card .s-desc { font-size: 12px; color: #94a3b8; line-height: 1.5; }
+
+    /* ── Keyboard Hint ── */
+    .kbd-hint {
+      position: fixed;
+      bottom: 60px;
+      right: 24px;
+      font-size: 11px;
+      color: #475569;
+      z-index: 99;
+    }
+    .kbd-hint kbd {
+      background: rgba(30,41,59,0.8);
+      border: 1px solid rgba(99,102,241,0.2);
+      padding: 2px 7px;
+      border-radius: 4px;
+      font-family: monospace;
+      font-size: 11px;
+    }
+  </style>
+</head>
+<body>
+
+<div class="slider-wrapper">
+  <div class="slides" id="slides">
+
+    <!-- ═══════════════ SLIDE 1: Title ═══════════════ -->
+    <div class="slide title-slide">
+      <div class="logo">💊</div>
+      <h1>DrugBot Architecture</h1>
+      <p class="tagline">End-to-end FDA Drug Information Assistant powered by<br>Model Context Protocol (MCP) + Google Gemini</p>
+      <div class="tech-badges">
+        <span class="badge badge-purple">Next.js 16</span>
+        <span class="badge badge-green">FastAPI</span>
+        <span class="badge badge-blue">FastMCP</span>
+        <span class="badge badge-amber">Gemini LLM</span>
+        <span class="badge badge-purple">OpenFDA API</span>
+        <span class="badge badge-green">Cloud Run</span>
+        <span class="badge badge-blue">Docker</span>
+        <span class="badge badge-amber">SSE Transport</span>
+      </div>
+    </div>
+
+    <!-- ═══════════════ SLIDE 2: High-Level Flow ═══════════════ -->
+    <div class="slide" style="background: radial-gradient(ellipse at 30% 50%, #1e1b4b33 0%, #0f172a 70%);">
+      <div class="slide-title">High-Level Architecture</div>
+      <div class="slide-subtitle">End-to-end request flow from user to FDA data</div>
+
+      <div class="arch-flow">
+        <div class="arch-box">
+          <div class="icon">👤</div>
+          <div class="label">User</div>
+          <div class="sublabel">Browser<br>(Chrome / Safari)</div>
+        </div>
+
+        <div class="arch-arrow-label">
+          <span class="protocol">HTTPS</span>
+          <span class="arch-arrow">→</span>
+        </div>
+
+        <div class="arch-box" style="border-color: rgba(99,102,241,0.35);">
+          <div class="icon">🖥️</div>
+          <div class="label">DrugBot UI</div>
+          <div class="sublabel">Next.js 16 + React 19<br>TailwindCSS + ShadCN</div>
+        </div>
+
+        <div class="arch-arrow-label">
+          <span class="protocol">POST /chat</span>
+          <span class="arch-arrow">→</span>
+        </div>
+
+        <div class="arch-box" style="border-color: rgba(52,211,153,0.35);">
+          <div class="icon">🤖</div>
+          <div class="label">MCP Client</div>
+          <div class="sublabel">FastAPI Agent<br>+ Gemini LLM</div>
+        </div>
+
+        <div class="arch-arrow-label">
+          <span class="protocol">MCP over SSE</span>
+          <span class="arch-arrow">→</span>
+        </div>
+
+        <div class="arch-box" style="border-color: rgba(56,189,248,0.35);">
+          <div class="icon">🔧</div>
+          <div class="label">MCP Server</div>
+          <div class="sublabel">FastMCP 2.0<br>12+ Tool Registry</div>
+        </div>
+
+        <div class="arch-arrow-label">
+          <span class="protocol">REST API</span>
+          <span class="arch-arrow">→</span>
+        </div>
+
+        <div class="arch-box" style="border-color: rgba(251,191,36,0.35);">
+          <div class="icon">🏛️</div>
+          <div class="label">OpenFDA API</div>
+          <div class="sublabel">api.fda.gov<br>Drug Data Endpoints</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════ SLIDE 3: Detailed Components ═══════════════ -->
+    <div class="slide" style="background: radial-gradient(ellipse at 70% 30%, #1e1b4b22 0%, #0f172a 70%);">
+      <div class="slide-title">Component Details</div>
+      <div class="slide-subtitle">Three-service architecture with clean separation of concerns</div>
+
+      <div class="detail-grid">
+        <!-- Frontend -->
+        <div class="detail-card">
+          <div class="card-header">
+            <div class="card-icon icon-purple">🖥️</div>
+            <div>
+              <div class="card-title">DrugBot UI</div>
+              <div class="card-tech">Next.js 16 &bull; React 19 &bull; TypeScript</div>
+            </div>
+          </div>
+          <ul>
+            <li>ChatGPT-style conversational interface</li>
+            <li>useChat() hook manages session state</li>
+            <li>Markdown rendering (react-markdown)</li>
+            <li>ShadCN UI + TailwindCSS v4 styling</li>
+            <li>Framer Motion animations</li>
+            <li>Dark/Light theme toggle</li>
+            <li>Responsive mobile-first design</li>
+            <li>Suggested query chips on start</li>
+          </ul>
+        </div>
+
+        <!-- MCP Client -->
+        <div class="detail-card">
+          <div class="card-header">
+            <div class="card-icon icon-green">🤖</div>
+            <div>
+              <div class="card-title">MCP Client (Agent)</div>
+              <div class="card-tech">FastAPI &bull; Gemini SDK &bull; Python 3.12</div>
+            </div>
+          </div>
+          <ul>
+            <li>LLM orchestration with Gemini 3 Pro</li>
+            <li>Session management (in-memory dict)</li>
+            <li>MCP protocol client (SSE transport)</li>
+            <li>Agentic tool-calling loop (max 10 turns)</li>
+            <li>System instructions (80+ lines of rules)</li>
+            <li>POST /chat, DELETE /session, GET /health</li>
+            <li>Structured response formatting</li>
+            <li>Tool execution logging</li>
+          </ul>
+        </div>
+
+        <!-- MCP Server -->
+        <div class="detail-card">
+          <div class="card-header">
+            <div class="card-icon icon-blue">🔧</div>
+            <div>
+              <div class="card-title">MCP Server</div>
+              <div class="card-tech">FastMCP 2.0 &bull; httpx &bull; Python 3.12</div>
+            </div>
+          </div>
+          <ul>
+            <li>12+ FDA tools exposed via MCP protocol</li>
+            <li>SSE transport for bidirectional comms</li>
+            <li>OpenFDA API wrapper (4 endpoints)</li>
+            <li>Smart data filtering (60-80% reduction)</li>
+            <li>Adverse events, labels, recalls, shortages</li>
+            <li>Token-optimized responses for LLM</li>
+            <li>Async HTTP with httpx</li>
+            <li>Optional API key for higher rate limits</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════ SLIDE 4: Data Flow ═══════════════ -->
+    <div class="slide" style="background: radial-gradient(ellipse at 50% 70%, #1e1b4b22 0%, #0f172a 70%);">
+      <div class="slide-title">Request Data Flow</div>
+      <div class="slide-subtitle">Example: "What are the side effects of Lisinopril?"</div>
+
+      <div class="flow-container">
+        <div class="flow-step">
+          <div class="flow-num fn-purple">1</div>
+          <div class="flow-content">
+            <div class="flow-text"><strong>User</strong> types query in ChatInput component</div>
+            <span class="flow-badge badge-purple">Browser</span>
+          </div>
+        </div>
+        <div class="flow-connector"></div>
+
+        <div class="flow-step">
+          <div class="flow-num fn-purple">2</div>
+          <div class="flow-content">
+            <div class="flow-text"><strong>useChat()</strong> sends POST /chat with message + session_id</div>
+            <span class="flow-badge badge-purple">Next.js UI</span>
+          </div>
+        </div>
+        <div class="flow-connector"></div>
+
+        <div class="flow-step">
+          <div class="flow-num fn-green">3</div>
+          <div class="flow-content">
+            <div class="flow-text"><strong>FastAPI</strong> retrieves session, initializes Gemini chat with system instructions</div>
+            <span class="flow-badge badge-green">MCP Client</span>
+          </div>
+        </div>
+        <div class="flow-connector"></div>
+
+        <div class="flow-step">
+          <div class="flow-num fn-amber">4</div>
+          <div class="flow-content">
+            <div class="flow-text"><strong>Gemini LLM</strong> decides to call <code style="color:#818cf8">get_drug_label("Lisinopril")</code></div>
+            <span class="flow-badge badge-amber">Gemini 3 Pro</span>
+          </div>
+        </div>
+        <div class="flow-connector"></div>
+
+        <div class="flow-step">
+          <div class="flow-num fn-blue">5</div>
+          <div class="flow-content">
+            <div class="flow-text"><strong>MCP Client</strong> calls tool on MCP Server via SSE transport</div>
+            <span class="flow-badge badge-blue">MCP Protocol</span>
+          </div>
+        </div>
+        <div class="flow-connector"></div>
+
+        <div class="flow-step">
+          <div class="flow-num fn-cyan">6</div>
+          <div class="flow-content">
+            <div class="flow-text"><strong>MCP Server</strong> queries <code style="color:#818cf8">/drug/label.json?search=brand_name:"Lisinopril"</code></div>
+            <span class="flow-badge" style="background:rgba(34,211,238,0.12);color:#67e8f9;">OpenFDA API</span>
+          </div>
+        </div>
+        <div class="flow-connector"></div>
+
+        <div class="flow-step">
+          <div class="flow-num fn-blue">7</div>
+          <div class="flow-content">
+            <div class="flow-text"><strong>filter_product_labeling_data()</strong> reduces response ~70% for token efficiency</div>
+            <span class="flow-badge badge-blue">Data Filter</span>
+          </div>
+        </div>
+        <div class="flow-connector"></div>
+
+        <div class="flow-step">
+          <div class="flow-num fn-amber">8</div>
+          <div class="flow-content">
+            <div class="flow-text"><strong>Gemini</strong> formats tool results into structured Markdown response</div>
+            <span class="flow-badge badge-amber">Gemini 3 Pro</span>
+          </div>
+        </div>
+        <div class="flow-connector"></div>
+
+        <div class="flow-step">
+          <div class="flow-num fn-rose">9</div>
+          <div class="flow-content">
+            <div class="flow-text"><strong>UI renders</strong> Markdown with react-markdown, copy button, and smooth animations</div>
+            <span class="flow-badge" style="background:rgba(244,63,94,0.12);color:#fda4af;">Response</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════ SLIDE 5: MCP Tools ═══════════════ -->
+    <div class="slide" style="background: radial-gradient(ellipse at 20% 50%, #1e1b4b22 0%, #0f172a 70%);">
+      <div class="slide-title">MCP Tool Registry</div>
+      <div class="slide-subtitle">12+ tools exposed by the MCP Server for FDA data access</div>
+
+      <div class="tools-grid">
+        <div class="tool-group">
+          <div class="tool-group-title" style="color:#f87171;">⚠️ Adverse Events</div>
+          <div class="tool-item"><code>search_adverse_events</code><br>Search by drug, reaction, severity</div>
+          <div class="tool-item"><code>get_serious_adverse_events</code><br>Deaths, life-threatening events</div>
+        </div>
+
+        <div class="tool-group">
+          <div class="tool-group-title" style="color:#60a5fa;">📋 Product Labeling</div>
+          <div class="tool-item"><code>get_drug_label</code><br>Official FDA label info</div>
+          <div class="tool-item"><code>search_drug_labels</code><br>Search by content or manufacturer</div>
+        </div>
+
+        <div class="tool-group">
+          <div class="tool-group-title" style="color:#fbbf24;">🔄 Recall Enforcement</div>
+          <div class="tool-item"><code>search_recalls</code><br>Search by term & risk level</div>
+          <div class="tool-item"><code>get_recent_drug_recalls</code><br>Last 100 days of recalls</div>
+          <div class="tool-item"><code>get_recalls_by_classification</code><br>Filter Class I / II / III</div>
+          <div class="tool-item"><code>get_critical_recalls</code><br>Class I (highest risk) only</div>
+        </div>
+
+        <div class="tool-group">
+          <div class="tool-group-title" style="color:#34d399;">📦 Drug Shortages</div>
+          <div class="tool-item"><code>search_drug_shortages</code><br>Search by term & availability</div>
+          <div class="tool-item"><code>get_current_drug_shortages</code><br>All active shortages</div>
+          <div class="tool-item"><code>search_shortages_by_manufacturer</code><br>Filter by manufacturer</div>
+        </div>
+      </div>
+
+      <div style="margin-top: 24px; display: flex; gap: 24px;">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <div style="width:8px;height:8px;border-radius:50%;background:#818cf8;"></div>
+          <span style="font-size:12px;color:#64748b;">4 OpenFDA Endpoints</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <div style="width:8px;height:8px;border-radius:50%;background:#34d399;"></div>
+          <span style="font-size:12px;color:#64748b;">Smart Data Filtering (60-80% reduction)</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <div style="width:8px;height:8px;border-radius:50%;background:#fbbf24;"></div>
+          <span style="font-size:12px;color:#64748b;">Agentic Tool Loop (max 10 turns)</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════ SLIDE 6: Deployment ═══════════════ -->
+    <div class="slide" style="background: radial-gradient(ellipse at 80% 30%, #1e1b4b22 0%, #0f172a 70%);">
+      <div class="slide-title">Deployment & Infrastructure</div>
+      <div class="slide-subtitle">Containerized on Google Cloud Run with Docker</div>
+
+      <div class="deploy-layout">
+        <div class="deploy-col">
+          <div class="deploy-card">
+            <h3>☁️ Cloud Run Services</h3>
+            <div class="deploy-row"><span class="key">MCP Server</span><span class="val">mcp-server-*.us-central1.run.app</span></div>
+            <div class="deploy-row"><span class="key">MCP Client</span><span class="val">mcp-client-*.us-central1.run.app</span></div>
+            <div class="deploy-row"><span class="key">Region</span><span class="val">us-central1</span></div>
+            <div class="deploy-row"><span class="key">Auth</span><span class="val">--allow-unauthenticated</span></div>
+          </div>
+
+          <div class="deploy-card">
+            <h3>🐳 Docker Configuration</h3>
+            <div class="deploy-row"><span class="key">Base Image</span><span class="val">python:3.12-slim</span></div>
+            <div class="deploy-row"><span class="key">Package Mgr</span><span class="val">uv (fast pip alternative)</span></div>
+            <div class="deploy-row"><span class="key">Lock File</span><span class="val">uv.lock (reproducible builds)</span></div>
+            <div class="deploy-row"><span class="key">Server Port</span><span class="val">8000</span></div>
+            <div class="deploy-row"><span class="key">Client Port</span><span class="val">8080</span></div>
+          </div>
+        </div>
+
+        <div class="deploy-col">
+          <div class="deploy-card">
+            <h3>🔑 Environment Variables</h3>
+            <table class="env-table">
+              <tr><td>GEMINI_API_KEY</td><td>Google Gemini API key</td></tr>
+              <tr><td>OPENFDA_API_KEY</td><td>FDA API key (optional)</td></tr>
+              <tr><td>NEXT_PUBLIC_API_URL</td><td>MCP Client endpoint URL</td></tr>
+              <tr><td>MCP_SERVER_URL</td><td>MCP Server SSE endpoint</td></tr>
+            </table>
+          </div>
+
+          <div class="deploy-card">
+            <h3>📦 Tech Stack Versions</h3>
+            <div class="deploy-row"><span class="key">Next.js</span><span class="val">16.1.6</span></div>
+            <div class="deploy-row"><span class="key">React</span><span class="val">19.2.4</span></div>
+            <div class="deploy-row"><span class="key">FastAPI</span><span class="val">0.115.0</span></div>
+            <div class="deploy-row"><span class="key">FastMCP</span><span class="val">2.0.0+</span></div>
+            <div class="deploy-row"><span class="key">MCP SDK</span><span class="val">1.25.0+</span></div>
+            <div class="deploy-row"><span class="key">Gemini SDK</span><span class="val">1.62.0+</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════ SLIDE 7: Summary ═══════════════ -->
+    <div class="slide" style="background: radial-gradient(ellipse at center, #1e1b4b33 0%, #0f172a 70%);">
+      <div class="slide-title">Key Capabilities</div>
+      <div class="slide-subtitle">What makes this architecture work</div>
+
+      <div class="summary-grid">
+        <div class="summary-card">
+          <div class="s-icon">🔗</div>
+          <div class="s-title">MCP Protocol</div>
+          <div class="s-desc">Standardized tool-calling interface via Model Context Protocol with SSE transport</div>
+        </div>
+        <div class="summary-card">
+          <div class="s-icon">🧠</div>
+          <div class="s-title">Agentic LLM</div>
+          <div class="s-desc">Gemini autonomously decides which tools to call with multi-turn reasoning loop</div>
+        </div>
+        <div class="summary-card">
+          <div class="s-icon">⚡</div>
+          <div class="s-title">Token Optimization</div>
+          <div class="s-desc">Smart data filtering reduces API responses by 60-80% before sending to LLM</div>
+        </div>
+        <div class="summary-card">
+          <div class="s-icon">🏛️</div>
+          <div class="s-title">Real FDA Data</div>
+          <div class="s-desc">Live access to adverse events, labels, recalls, and shortages from OpenFDA</div>
+        </div>
+        <div class="summary-card">
+          <div class="s-icon">☁️</div>
+          <div class="s-title">Cloud Native</div>
+          <div class="s-desc">Fully containerized with Docker, deployed as serverless services on Cloud Run</div>
+        </div>
+        <div class="summary-card">
+          <div class="s-icon">💬</div>
+          <div class="s-title">Conversational UX</div>
+          <div class="s-desc">ChatGPT-style interface with session memory, Markdown rendering, and animations</div>
+        </div>
+      </div>
+
+      <div style="margin-top: 36px; text-align: center;">
+        <p style="font-size: 13px; color: #475569;">Ready for draw.io export &mdash; Each slide maps to a diagram layer</p>
+      </div>
+    </div>
+
+  </div><!-- /slides -->
+</div><!-- /slider-wrapper -->
+
+<!-- Navigation -->
+<div class="nav-bar">
+  <button class="nav-btn" id="prevBtn" onclick="navigate(-1)">&#8592; Prev</button>
+  <div class="dots" id="dots"></div>
+  <span class="slide-counter" id="counter">1 / 7</span>
+  <button class="nav-btn" id="nextBtn" onclick="navigate(1)">Next &#8594;</button>
+</div>
+
+<div class="kbd-hint">
+  <kbd>&#8592;</kbd> <kbd>&#8594;</kbd> arrow keys to navigate
+</div>
+
+<script>
+  let current = 0;
+  const total = document.querySelectorAll('.slide').length;
+  const slidesEl = document.getElementById('slides');
+  const dotsEl = document.getElementById('dots');
+  const counterEl = document.getElementById('counter');
+  const prevBtn = document.getElementById('prevBtn');
+  const nextBtn = document.getElementById('nextBtn');
+
+  // Create dots
+  for (let i = 0; i < total; i++) {
+    const dot = document.createElement('button');
+    dot.className = 'dot' + (i === 0 ? ' active' : '');
+    dot.onclick = () => goTo(i);
+    dotsEl.appendChild(dot);
+  }
+
+  function goTo(index) {
+    current = Math.max(0, Math.min(index, total - 1));
+    slidesEl.style.transform = `translateX(-${current * 100}vw)`;
+    counterEl.textContent = `${current + 1} / ${total}`;
+    prevBtn.disabled = current === 0;
+    nextBtn.disabled = current === total - 1;
+    document.querySelectorAll('.dot').forEach((d, i) => {
+      d.classList.toggle('active', i === current);
+    });
+  }
+
+  function navigate(dir) { goTo(current + dir); }
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') navigate(1);
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') navigate(-1);
+  });
+
+  // Touch support
+  let touchStartX = 0;
+  document.addEventListener('touchstart', (e) => { touchStartX = e.touches[0].clientX; });
+  document.addEventListener('touchend', (e) => {
+    const diff = touchStartX - e.changedTouches[0].clientX;
+    if (Math.abs(diff) > 50) navigate(diff > 0 ? 1 : -1);
+  });
+</script>
+
+</body>
+</html>

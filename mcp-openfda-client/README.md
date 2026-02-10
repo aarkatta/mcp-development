@@ -8,7 +8,7 @@ uv add google-genai
   uv run python server.py
 
   3. Start the API (in another terminal):
-  uv run uvicorn client:app --host 0.0.0.0 --port 8080 --reload
+  uv run uvicorn client:app --host 0.0.0.0 --port 9080 --reload
 
 API Endpoints:
   ┌──────────┬────────┬────────────────────────────┐

@@ -21,9 +21,33 @@ from mcp.client.sse import sse_client
 load_dotenv()
 
 # --- CONFIGURATION ---
-REMOTE_SERVER_URL = "https://mcp-server-722021783439.us-central1.run.app/sse"
-# REMOTE_SERVER_URL = "http://0.0.0.0:8080/sse"
+# REMOTE_SERVER_URL = "https://mcp-server-722021783439.us-central1.run.app/sse"
+REMOTE_SERVER_URL = "http://0.0.0.0:8080/sse"
 MODEL_NAME = "gemini-3-pro-preview"
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Handles MCP connection and Gemini Client initialization."""
+    global gemini_client
+
+    try:
+        # 1. Initialize Gemini Client (independent of MCP)
+        gemini_client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+
+        # 2. Connect to MCP server with retries
+        await connect_mcp(app)
+
+        yield
+
+    except Exception as e:
+        print(f"✗ Startup failed: {e}")
+        raise
+    finally:
+        if mcp_session:
+            await app.state.client_session.__aexit__(None, None, None)
+        if hasattr(app.state, "sse_streams"):
+            await app.state.sse_streams.__aexit__(None, None, None)
+        print("✓ Cleanup complete.")
 
 
 # --- GLOBAL STATE ---
@@ -32,31 +56,6 @@ gemini_client: Optional[genai.Client] = None
 
 # Simple in-memory session store: { "session_id": [messages_list] }
 user_sessions: Dict[str, List[types.Content]] = {}
-
-SYSTEM_INSTRUCTION_ARCHIVE = (
-    "You are an intelligent, proactive pharmaceutical assistant with access to official FDA data. "
-    "Your goal is to provide accurate, safety-critical information using strictly defined tools.\n\n"
-
-    "### AVAILABLE TOOLS\n"
-    "1) `get_drug_label`: Authoritative source for safety, usage, and warnings.\n"
-    "2) `search_drug_recalls`: Search for historical drug recall events for a specific drug.\n"
-    "3) `get_recent_drug_recalls`: Get a list of the latest FDA drug recall alerts.\n"
-    "4) `get_drug_recalls_by_classification`: Filter recalls by risk level (Class I, II, III).\n"
-    "5) `get_drug_shortages`: Check current supply status and shortage details.\n\n"
-
-    "### CORE AGENTIC WORKFLOW\n"
-    "1. CLARIFY & PLAN: Before calling a tool, ensure you have the specific drug name. "
-    "If the user's request is ambiguous (e.g., 'that heart medicine'), ask for the specific name first.\n"
-    "2. EXECUTE: Use the most relevant tool for the primary intent. "
-    "Do NOT guess—if a tool is needed, you must call it.\n"
-    "3. ANSWER & VERIFY: Provide a clear answer based *strictly* on the tool's output. "
-    "If the tool returns no data (e.g., 'No recalls found'), state that explicitly rather than hallucinating.\n"
-    "4. PROACTIVE SAFETY CHECK (Required):\n"
-    "   - After answering a safety/label question, ask: 'Would you like to check for recent recalls or shortages?'\n"
-    "   - After answering a shortage question, ask: 'Would you like to review safety warnings?'\n"
-    "   - After answering a recall question, ask: 'Would you like to see the risk classification?'\n"
-    "   - **Constraint:** Never run these extra checks automatically. Always ask for permission."
-)
 
 SYSTEM_INSTRUCTION = """You are a pharmaceutical assistant with access to FDA drug databases. Your job is to provide clear, actionable safety information using real FDA data.
 
@@ -199,29 +198,6 @@ async def connect_mcp(app: FastAPI, max_retries: int = 5, base_delay: float = 2.
     raise RuntimeError(f"Failed to connect to MCP server after {max_retries} attempts")
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    """Handles MCP connection and Gemini Client initialization."""
-    global gemini_client
-
-    try:
-        # 1. Initialize Gemini Client (independent of MCP)
-        gemini_client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
-
-        # 2. Connect to MCP server with retries
-        await connect_mcp(app)
-
-        yield
-
-    except Exception as e:
-        print(f"✗ Startup failed: {e}")
-        raise
-    finally:
-        if mcp_session:
-            await app.state.client_session.__aexit__(None, None, None)
-        if hasattr(app.state, "sse_streams"):
-            await app.state.sse_streams.__aexit__(None, None, None)
-        print("✓ Cleanup complete.")
 
 
 app = FastAPI(title="OpenFDA Pharmaceutical Assistant", lifespan=lifespan)

@@ -24,10 +24,6 @@ gcloud run deploy mcp-server \
 Service [mcp-server] revision [mcp-server-00004-b62] has been deployed and is serving 100 percent of traffic.
 Service URL: https://mcp-server-722021783439.us-central1.run.app
 
-  for role in roles/viewer roles/serviceusage.serviceUsageConsumer; do
-  gcloud projects add-iam-policy-binding mcp-openfda-server \
-    --member="user:aarkatta@gmail.com" \
-    --role="$role"
-done
+
 
 
