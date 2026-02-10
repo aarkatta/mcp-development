@@ -6,7 +6,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { MessageBubble } from './message-bubble';
 import { Message } from '@/lib/types';
-import { Pill, Sparkles, Shield, Search } from 'lucide-react';
+import { Pill, Sparkles, Shield, Search, Loader2 } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 interface MessageListProps {
@@ -47,12 +47,13 @@ const suggestedQueries = [
 
 export function MessageList({ messages, isLoading, onSendMessage }: MessageListProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const lastMessage = messages[messages.length - 1];
 
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [messages, isLoading]);
+  }, [messages, isLoading, lastMessage?.content, lastMessage?.toolStatus]);
 
   return (
     <ScrollArea className="flex-1 p-4" ref={scrollRef}>
@@ -127,7 +128,24 @@ export function MessageList({ messages, isLoading, onSendMessage }: MessageListP
           </motion.div>
         ))}
 
-        {isLoading && <TypingIndicator />}
+        {/* Tool status indicator */}
+        {lastMessage?.toolStatus && (
+          <motion.div
+            className="flex gap-3 items-center pl-11"
+            initial={{ opacity: 0, y: 5 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.2 }}
+          >
+            <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+            <span className="text-xs text-muted-foreground font-medium">
+              {lastMessage.toolStatus}
+            </span>
+          </motion.div>
+        )}
+
+        {/* Typing indicator: only when streaming with no content and no tool status yet */}
+        {isLoading && lastMessage?.role === 'assistant' && lastMessage?.isStreaming
+          && !lastMessage.content && !lastMessage.toolStatus && <TypingIndicator />}
       </div>
     </ScrollArea>
   );

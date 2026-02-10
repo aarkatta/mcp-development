@@ -50,13 +50,22 @@ export function MessageBubble({ message }: MessageBubbleProps) {
             <p className="whitespace-pre-wrap break-words">{message.content}</p>
           ) : (
             <div className="prose prose-sm dark:prose-invert max-w-none prose-p:my-2.5 prose-ul:my-2.5 prose-ol:my-3 prose-li:my-2 prose-li:leading-relaxed prose-hr:my-4 prose-h1:mt-4 prose-h1:mb-2 prose-h2:mt-4 prose-h2:mb-2 prose-h3:mt-3 prose-h3:mb-1.5 prose-strong:text-card-foreground prose-headings:text-card-foreground prose-a:text-primary prose-code:text-primary prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:text-xs">
-              <ReactMarkdown>{message.content}</ReactMarkdown>
+              {message.content ? (
+                <>
+                  <ReactMarkdown>{message.content}</ReactMarkdown>
+                  {message.isStreaming && (
+                    <span className="inline-block w-1.5 h-4 ml-0.5 bg-primary/70 animate-pulse rounded-sm align-text-bottom" />
+                  )}
+                </>
+              ) : !message.isStreaming ? (
+                <p>I couldn&apos;t provide an answer.</p>
+              ) : null}
             </div>
           )}
         </div>
 
         {/* Action buttons for assistant messages */}
-        {!isUser && (
+        {!isUser && !message.isStreaming && (
           <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
             <Button
               variant="ghost"

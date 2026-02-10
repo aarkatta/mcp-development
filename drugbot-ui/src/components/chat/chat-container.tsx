@@ -24,7 +24,14 @@ export function ChatContainer() {
             <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
             <span className="text-xs text-muted-foreground">
               {isLoading ? (
-                <span className="ai-gradient-text font-medium">DrugBot is thinking...</span>
+                <span className="ai-gradient-text font-medium">
+                  {(() => {
+                    const lastMsg = messages[messages.length - 1];
+                    if (lastMsg?.toolStatus) return lastMsg.toolStatus;
+                    if (lastMsg?.isStreaming && lastMsg.content) return 'DrugBot is responding...';
+                    return 'DrugBot is thinking...';
+                  })()}
+                </span>
               ) : (
                 'DrugBot is online'
               )}
