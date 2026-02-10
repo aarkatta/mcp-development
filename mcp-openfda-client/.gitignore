@@ -39,3 +39,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# cloud run service definitions (may contain secret references)
+mcp-client.yaml
+mcp-server.yml
