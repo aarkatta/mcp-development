@@ -1,8 +1,3 @@
-uv run server.py
-
-Deployment
-gcloud init
-
 ## Artifact repository to store the container image.
 gcloud artifacts repositories create remote-mcp-servers \
   --repository-format=docker \
@@ -20,9 +15,6 @@ gcloud run deploy mcp-server \
   --region=us-central1 \  
   --allow-unauthenticated
 
-## MCP server URL
-Service [mcp-server] revision [mcp-server-00004-b62] has been deployed and is serving 100 percent of traffic.
-Service URL: https://mcp-server-722021783439.us-central1.run.app
 
 
 
